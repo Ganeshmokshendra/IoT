@@ -1,0 +1,83 @@
+import sys
+import os
+import RPi.GPIO as GPIO
+from time import sleep
+import Adafruit_DHT
+import urllib2
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+fromaddr = "dumfun01@gmail.com"
+toaddr = "ganeshganeshm2@gmail.com"
+
+msg = MIMEMultipart()
+msg['From'] = fromaddr
+msg['To'] = toaddr
+msg['Subject'] = "Water Required"
+
+body = "Water Required for plants, turning on motor"
+msg.attach(MIMEText(body, 'plain'))
+
+server = smtplib.SMTP('smtp.gmail.com', 587)
+server.starttls()
+server.login(fromaddr, "password")
+text = msg.as_string()
+
+sensor = Adafruit_DHT.DHT22
+
+pin = 22
+
+def config():
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setwarnings(False)
+    GPIO.cleanup()
+    GPIO.setup(23, GPIO.OUT)
+    GPIO.setup(24, GPIO.OUT)
+    GPIO.setup(21, GPIO.OUT)
+    GPIO.setup(19, GPIO.IN)
+    GPIO.output(23, GPIO.HIGH)
+
+
+myAPI = "VOAJR26T35R6Q83O"
+
+def main():
+    baseURL = 'https://api.thingspeak.com/update?api_keys=%s'%myAPI
+    a = 0
+    while(1):
+        try:
+            humidity, temperature = Adafruit_DHT.read_retry(sensor, pin)
+            GPIO.output(24, GPIO.LOW)
+            cel = 20
+
+            if temperature > cel:
+                GPIO.output(23, GPIO.LOW)
+            else:
+                GPIO.output(23, GPIO.HIGH)
+            soil = GPIO.input(18)
+            print(soil)
+            if soil == 1:
+                print("Turning on sprinkler due to Insufficient Water")
+                if a <= 1:
+                    os.system("Water%20Required")
+                    server.sendmail(fromaddr, toaddr, text)
+                    a += 1
+                GPIO.output(21, GPIO.LOW)
+                sleep(3)
+                GPIO.output(21,GPIO.HIGH)
+            print(temperature, humidity)
+            f = urllib2.urlopen(baseURL+"&field1=%s&field2=%s"%(temperature, humidity))
+            print(f.read())
+            f.close()
+            sleep(20)
+        except KeyboardInterrupt:
+            print("Exiting")
+            GPIO.output(24, GPIO.HIGH)
+            GPIO.output(23, GPIO.HIGH)
+            GPIO.output(21, GPIO.HIGH)
+            break
+
+
+if __name__ == '__main__':
+    config()
+    main()
